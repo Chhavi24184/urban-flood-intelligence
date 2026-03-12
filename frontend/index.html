@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FloodSense AI | Urban Intelligence</title>
+  
+  <!-- Tailwind CSS & Flowbite -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f4ff', 100: '#e1e9ff', 200: '#c7d6ff', 300: '#a3bcff', 400: '#7a96ff',
+              500: '#2962f6', 600: '#2558dd', 700: '#1f4ab9', 800: '#183b94', 900: '#143079',
+            },
+            danger: '#ff4d4d',
+            warning: '#ffcc00',
+            success: '#00e676',
+          },
+          animation: {
+            'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'glow': 'glow 2s ease-in-out infinite alternate',
+          },
+          keyframes: {
+            glow: {
+              'from': { 'box-shadow': '0 0 10px rgba(41, 98, 246, 0.2)' },
+              'to': { 'box-shadow': '0 0 20px rgba(41, 98, 246, 0.5)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Recharts (for data visualization) -->
+  <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+
+  <style>
+    #map { height: 100%; width: 100%; border-radius: 1.5rem; z-index: 10; }
+    .leaflet-container { background: #0f172a; border-radius: 1.5rem; }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    .glass { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .neo-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    .neo-card:hover { transform: translateY(-4px); border-color: rgba(41, 98, 246, 0.4); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3); }
+    .hazard-high { background: linear-gradient(to right, #ef444422, transparent); border-left: 4px solid #ef4444; }
+    .hazard-medium { background: linear-gradient(to right, #f59e0b22, transparent); border-left: 4px solid #f59e0b; }
+    .hazard-low { background: linear-gradient(to right, #10b98122, transparent); border-left: 4px solid #10b981; }
+    .glow-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px currentColor; }
+  </style>
+</head>
+<body class="bg-[#020617] text-slate-200 overflow-hidden h-screen font-sans">
+  <div id="root" class="h-full"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } = Recharts;
+
+    const API_BASE = "http://127.0.0.1:8000";
+
+    // --- Components ---
+
+    const Icon = ({ name, className = "w-5 h-5", size = 20 }) => {
+      useEffect(() => { lucide.createIcons(); }, [name]);
+      return <i data-lucide={name} className={className} style={{width: size, height: size}}></i>;
+    };
+
+    const Navbar = ({ status }) => (
+      <nav className="glass px-6 py-3 flex justify-between items-center z-[1001] border-b border-white/5">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-brand-600 rounded-xl shadow-lg shadow-brand-600/30 animate-glow">
+            <Icon name="shield-check" className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-black tracking-tight text-white flex items-center gap-2">
+              FloodSense <span className="bg-brand-500/20 text-brand-400 text-[10px] px-2 py-0.5 rounded uppercase tracking-widest border border-brand-500/30">v2.0 AI</span>
+            </h1>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Urban Resilience Monitoring System</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/50 border border-white/5">
+            <div className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-red-500 shadow-[0_0_8px_#ef4444]'}`}></div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{status === 'connected' ? 'Live System' : 'System Offline'}</span>
+          </div>
+          <Icon name="bell" className="text-slate-500 hover:text-white cursor-pointer transition-colors" />
+          <Icon name="settings" className="text-slate-500 hover:text-white cursor-pointer transition-colors" />
+          <div className="w-8 h-8 rounded-full bg-slate-800 border border-white/10 overflow-hidden">
+            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="avatar" />
+          </div>
+        </div>
+      </nav>
+    );
+
+    const StatBlock = ({ label, value, icon, color }) => (
+      <div className="glass neo-card rounded-2xl p-4 flex flex-col gap-1">
+        <div className="flex justify-between items-start">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</span>
+          <div className={`p-1.5 rounded-lg bg-${color}-500/10 text-${color}-400`}>
+            <Icon name={icon} size={14} />
+          </div>
+        </div>
+        <div className="text-2xl font-black text-white">{value}</div>
+      </div>
+    );
+
+    const SimulationPanel = ({ rain, setRain, handleSimulate, loading }) => (
+      <div className="glass rounded-3xl p-5 space-y-5 border-white/5 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-black uppercase tracking-widest text-brand-400 flex items-center gap-2">
+            <Icon name="zap" size={14} /> Simulation Engine
+          </h3>
+          <span className="text-[10px] bg-brand-500/20 text-brand-400 px-2 py-0.5 rounded-full border border-brand-500/20">Active</span>
+        </div>
+        
+        <div className="space-y-4">
+          <div className="space-y-3">
+            <div className="flex justify-between text-[10px] font-bold uppercase text-slate-500">
+              <span>Rainfall Intensity</span>
+              <span className="text-brand-400">+{rain}%</span>
+            </div>
+            <input 
+              type="range" min="0" max="100" step="1"
+              value={rain}
+              onChange={(e) => setRain(e.target.value)}
+              className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-brand-500"
+            />
+          </div>
+          
+          <button 
+            onClick={handleSimulate}
+            disabled={loading}
+            className="w-full py-3 bg-brand-600 hover:bg-brand-500 disabled:bg-slate-800 text-white rounded-xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-600/20 active:scale-95"
+          >
+            {loading ? <Icon name="loader" className="animate-spin" /> : <Icon name="refresh-cw" size={14} />}
+            Run Predictive Model
+          </button>
+        </div>
+      </div>
+    );
+
+    // --- Main App ---
+
+    function App() {
+      const mapRef = useRef(null);
+      const layersRef = useRef([]);
+      const [wards, setWards] = useState([]);
+      const [metadata, setMetadata] = useState([]);
+      const [recommendations, setRecommendations] = useState([]);
+      const [simulationRain, setSimulationRain] = useState(0);
+      const [loading, setLoading] = useState(true);
+      const [status, setStatus] = useState("checking");
+      const [selectedWard, setSelectedWard] = useState(null);
+      const [viewMode, setViewMode] = useState('risk'); // risk, readiness
+
+      const fetchData = async () => {
+        setLoading(true);
+        try {
+          const [riskRes, metaRes, recRes] = await Promise.all([
+            fetch(`${API_BASE}/flood-risk?level=ward`),
+            fetch(`${API_BASE}/wards-metadata`),
+            fetch(`${API_BASE}/recommendations`)
+          ]);
+          const [riskData, metaData, recData] = await Promise.all([
+            riskRes.json(), metaRes.json(), recRes.json()
+          ]);
+          setWards(riskData.wards);
+          setMetadata(metaData.wards);
+          setRecommendations(recData.recommendations);
+          setStatus("connected");
+        } catch (err) {
+          setStatus("disconnected");
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      useEffect(() => { fetchData(); }, []);
+
+      useEffect(() => {
+        if (!mapRef.current) {
+          mapRef.current = L.map('map', { zoomControl: false, attributionControl: false }).setView([12.96, 77.60], 13);
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(mapRef.current);
+          L.control.zoom({ position: 'bottomright' }).addTo(mapRef.current);
+        }
+      }, []);
+
+      useEffect(() => {
+        if (!mapRef.current || !wards.length || !metadata.length) return;
+        layersRef.current.forEach(layer => mapRef.current.removeLayer(layer));
+        layersRef.current = [];
+
+        wards.forEach(ward => {
+          const meta = metadata.find(m => m.id === ward.ward_id);
+          if (!meta) return;
+
+          const color = ward.category === "high" ? "#ef4444" : ward.category === "medium" ? "#f59e0b" : "#10b981";
+          const rect = L.rectangle(
+            [[meta.min_lat, meta.min_lon], [meta.max_lat, meta.max_lon]],
+            { color, weight: 1.5, fillOpacity: 0.35, className: 'ward-polygon' }
+          ).addTo(mapRef.current);
+
+          rect.on('click', () => setSelectedWard(ward));
+          layersRef.current.push(rect);
+        });
+      }, [wards, metadata]);
+
+      const handleSimulate = async () => {
+        setLoading(true);
+        try {
+          const res = await fetch(`${API_BASE}/simulate-rainfall`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ percent_increase: parseFloat(simulationRain) })
+          });
+          const data = await res.json();
+          setWards(data.wards);
+          if (selectedWard) {
+            const updated = data.wards.find(w => w.ward_id === selectedWard.ward_id);
+            if (updated) setSelectedWard(updated);
+          }
+        } catch (err) {
+          alert("Simulation failed.");
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const selectedWardDetails = useMemo(() => {
+        if (!selectedWard) return null;
+        const rec = recommendations.find(r => r.ward_id === selectedWard.ward_id);
+        return { ...selectedWard, ...rec };
+      }, [selectedWard, recommendations]);
+
+      const avgRisk = wards.length ? (wards.reduce((acc, w) => acc + w.score, 0) / wards.length).toFixed(2) : 0;
+      const highRiskCount = wards.filter(w => w.category === "high").length;
+
+      // --- Chart Data ---
+      const chartData = wards.map(w => ({ name: w.ward_name, risk: w.score * 100 }));
+
+      return (
+        <div className="flex flex-col h-full w-full">
+          <Navbar status={status} />
+          
+          <div className="flex flex-1 overflow-hidden p-6 gap-6">
+            
+            {/* Left Sidebar */}
+            <aside className="w-80 flex flex-col gap-6 overflow-y-auto pr-2">
+              
+              <div className="grid grid-cols-2 gap-4">
+                <StatBlock label="Global Risk" value={`${(avgRisk * 100).toFixed(0)}%`} icon="activity" color="brand" />
+                <StatBlock label="Alert Zones" value={highRiskCount} icon="alert-triangle" color="red" />
+              </div>
+
+              <SimulationPanel 
+                rain={simulationRain} 
+                setRain={setSimulationRain} 
+                handleSimulate={handleSimulate} 
+                loading={loading} 
+              />
+
+              <div className="glass rounded-3xl p-5 space-y-4">
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                  <Icon name="bar-chart-3" size={14} /> Risk Distribution
+                </h3>
+                <div className="h-32 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData}>
+                      <defs>
+                        <linearGradient id="colorRisk" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#2962f6" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#2962f6" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <Area type="monotone" dataKey="risk" stroke="#2962f6" fillOpacity={1} fill="url(#colorRisk)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="glass rounded-3xl p-5 flex-1 overflow-hidden flex flex-col gap-4">
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                  <Icon name="navigation" size={14} /> Critical Ward List
+                </h3>
+                <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                  {wards.sort((a,b) => b.score - a.score).map(w => (
+                    <div 
+                      key={w.ward_id}
+                      onClick={() => setSelectedWard(w)}
+                      className={`p-3 rounded-2xl cursor-pointer transition-all border border-white/5 flex items-center justify-between ${selectedWard?.ward_id === w.ward_id ? 'bg-brand-500/10 border-brand-500/40 shadow-lg shadow-brand-500/10' : 'hover:bg-white/5'}`}
+                    >
+                      <div>
+                        <div className="text-[11px] font-black text-white">{w.ward_name}</div>
+                        <div className="text-[9px] text-slate-500 font-bold uppercase">ID: {w.ward_id}</div>
+                      </div>
+                      <div className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${w.category === 'high' ? 'text-red-400 bg-red-400/10' : w.category === 'medium' ? 'text-amber-400 bg-amber-400/10' : 'text-emerald-400 bg-emerald-400/10'}`}>
+                        {(w.score * 100).toFixed(0)}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </aside>
+
+            {/* Main Map View */}
+            <main className="flex-1 relative">
+              <div id="map" className="shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/5" />
+              
+              {/* Legend Overlay */}
+              <div className="absolute top-6 left-6 z-[1000] glass px-4 py-3 rounded-2xl flex items-center gap-6 border-white/10 shadow-xl">
+                <div className="flex items-center gap-2">
+                  <span className="glow-dot bg-red-500"></span>
+                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">High Hazard</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="glow-dot bg-amber-500"></span>
+                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Medium Risk</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="glow-dot bg-emerald-500"></span>
+                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Safe Zone</span>
+                </div>
+              </div>
+
+              {/* Selected Ward Info Overlay */}
+              {selectedWardDetails && (
+                <div className="absolute top-6 right-6 w-96 z-[1000] animate-in slide-in-from-right duration-500">
+                  <div className="glass rounded-[2rem] p-6 shadow-2xl border-brand-500/30 border-2 overflow-hidden relative">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-brand-500/10 blur-3xl -z-10"></div>
+                    
+                    <div className="flex justify-between items-start mb-6">
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-400 mb-1">Ward Insight Analysis</div>
+                        <h2 className="text-3xl font-black text-white tracking-tight">{selectedWardDetails.ward_name}</h2>
+                      </div>
+                      <button onClick={() => setSelectedWard(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                        <Icon name="x" size={20} className="text-slate-400" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-8">
+                      <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Hazard Level</div>
+                        <div className={`text-2xl font-black ${selectedWardDetails.category === 'high' ? 'text-red-400' : 'text-emerald-400'}`}>
+                          {(selectedWardDetails.score * 100).toFixed(0)}%
+                        </div>
+                      </div>
+                      <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Readiness</div>
+                        <div className="text-2xl font-black text-brand-400">{selectedWardDetails.readiness_score}%</div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                        <Icon name="alert-circle" size={14} className="text-brand-400" /> AI Recommendation Report
+                      </h4>
+                      <div className="space-y-2.5">
+                        {selectedWardDetails.actions?.map((action, i) => (
+                          <div key={i} className={`p-3 rounded-xl flex gap-3 items-center text-[11px] font-bold ${selectedWardDetails.category === 'high' ? 'hazard-high' : selectedWardDetails.category === 'medium' ? 'hazard-medium' : 'hazard-low'}`}>
+                            <Icon name="check-circle" size={12} className="text-brand-400 shrink-0" />
+                            <span className="text-slate-200">{action}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button className="w-full mt-8 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2">
+                      <Icon name="file-text" size={14} /> Download PDF Report
+                    </button>
+                  </div>
+                </div>
+              )}
+            </main>
+          </div>
+
+          {/* Global Warning Bar */}
+          {highRiskCount > 0 && (
+            <div className="bg-red-600 py-1 text-center overflow-hidden whitespace-nowrap">
+              <div className="inline-block animate-pulse text-[9px] font-black uppercase tracking-[0.3em] text-white">
+                ⚠️ CRITICAL FLOOD RISK DETECTED IN {highRiskCount} SECTORS — EMERGENCY RESPONSE ADVISORY ACTIVE ⚠️
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

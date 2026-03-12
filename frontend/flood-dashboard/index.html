@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FloodSense AI | Urban Intelligence</title>
+    
+    <!-- Tailwind & Leaflet -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+      #map { height: 100%; width: 100%; border-radius: 1.5rem; z-index: 10; }
+      .leaflet-container { background: #0f172a; border-radius: 1.5rem; }
+      ::-webkit-scrollbar { width: 5px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+      .glass { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+      .neo-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+      .neo-card:hover { transform: translateY(-4px); border-color: rgba(41, 98, 246, 0.4); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3); }
+      .hazard-high { background: linear-gradient(to right, #ef444422, transparent); border-left: 4px solid #ef4444; }
+      .hazard-medium { background: linear-gradient(to right, #f59e0b22, transparent); border-left: 4px solid #f59e0b; }
+      .hazard-low { background: linear-gradient(to right, #10b98122, transparent); border-left: 4px solid #10b981; }
+      .glow-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px currentColor; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
