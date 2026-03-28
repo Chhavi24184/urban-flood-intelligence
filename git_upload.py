@@ -7,7 +7,7 @@ def run_git_commands():
         ["git", "init"],
         ["git", "add", "."],
         ["git", "commit", "-m", "Initial commit: Urban Flood Intelligence System"],
-        ["git", "remote", "add", "origin", "https://github.com/vansh881600/Urban-flood-intelligence-"],
+        ["git", "remote", "add", "origin", "https://github.com/vansh881600/Urban-flood-intelligence-.git"],
         ["git", "branch", "-M", "main"],
         ["git", "push", "-u", "origin", "main"]
     ]
