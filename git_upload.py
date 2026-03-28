@@ -5,11 +5,11 @@ def run_git_commands():
     cwd = r"c:\Users\admin\OneDrive\Desktop\New folder (9)\urban-flood-intel"
     commands = [
         ["git", "init"],
-        ["git", "add", "README.md", ".gitignore", "backend", "frontend"],
+        ["git", "add", "."],
         ["git", "commit", "-m", "Initial commit: Urban Flood Intelligence System"],
-        ["git", "remote", "add", "origin", "https://github.com/Chhavi24184/urban-flood-intelligence"],
+        ["git", "remote", "add", "origin", "https://github.com/vansh881600/Urban-flood-intelligence-"],
         ["git", "branch", "-M", "main"],
-        # ["git", "push", "-u", "origin", "main"] # Push might fail without credentials
+        ["git", "push", "-u", "origin", "main"]
     ]
     
     for cmd in commands:
